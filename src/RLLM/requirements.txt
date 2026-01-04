@@ -1,0 +1,16 @@
+
+torch>=2.4
+transformers
+accelerate
+
+
+numpy
+packaging
+psutil
+tqdm
+pyyaml
+pydantic
+
+
+safetensors
+datasets

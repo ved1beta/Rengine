@@ -1,6 +1,6 @@
 import torch
-from src.RLLM.envs.cartpole import CartPoleEnv
-
+from RLLM.envs.cartpole import CartPoleEnv
+from RLLM.models.policy import ActorCritic
 
 def test_cartpole_env():
     device = torch.device("cpu")
@@ -19,3 +19,19 @@ def test_cartpole_env():
         assert obs.shape[0] == env.obs_dim
         assert reward.shape == ()
         steps += 1
+
+
+
+def test_policy_forward():
+    obs_dim = 4
+    action_dim = 2
+
+    model = ActorCritic(obs_dim, action_dim)
+
+    obs = torch.randn(obs_dim)
+
+    action, logprob, value = model(obs)
+
+    assert action.dtype == torch.int64
+    assert logprob.ndim == 0
+    assert value.ndim == 0

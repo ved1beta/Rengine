@@ -5,12 +5,12 @@ from .base import BaseEnv
 
 
 class CartPoleEnv(BaseEnv):
-    def __init__(self, device: torch.device, seed: int = 42):
+    def __init__(self, device: torch.device):
         self.env = gym.make("CartPole-v1")
         self.device = device
 
-        self.env.reset(seed=seed)
-        self.env.action_space.seed(seed)
+        self.env.reset(seed=42)
+        self.env.action_space.seed(42)
 
 
         self._obs_dim = self.env.observation_space.shape[0]

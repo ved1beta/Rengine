@@ -1,5 +1,5 @@
 """
-Minimal setup.py for axolotl (infra / inference / quantization focus)
+Minimal setup.py for RLLM (infra / inference / quantization )
 """
 
 import ast
@@ -61,16 +61,13 @@ extras_require = {
 install_requires, dependency_links = parse_requirements()
 
 setup(
-    name="axolotl",
+    name="RLLM",
     version=get_package_version(),
+    description="RLLM: infra / inference / quantization",
+    url="https://github.com/ved1beta/RLLM",
     package_dir={"": "src"},
     packages=find_packages("src"),
     install_requires=install_requires,
     dependency_links=dependency_links,
     extras_require=extras_require,
-    entry_points={
-        "console_scripts": [
-            "axolotl=axolotl.cli.main:main",
-        ],
-    },
 )

@@ -52,5 +52,8 @@ class ActorCritic(nn.Module):
 
         return action, logprob, value
 
-
-   
+    def get_entropy(self, obs: torch.Tensor):
+        features = self.encoder(obs)
+        logits = self.policy_head(features)
+        dist = Categorical(logits=logits)
+        return dist.entropy()

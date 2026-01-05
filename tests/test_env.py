@@ -1,7 +1,7 @@
 import torch
 from RLLM.envs.cartpole import CartPoleEnv
 from RLLM.models.policy import ActorCritic
-
+from RLLM.rollout import RolloutBuffer
 def test_cartpole_env():
     device = torch.device("cpu")
     env = CartPoleEnv(seed=42, device=device)
@@ -35,3 +35,24 @@ def test_policy_forward():
     assert action.dtype == torch.int64
     assert logprob.ndim == 0
     assert value.ndim == 0
+
+def test_rollout_buffer():
+    device = torch.device("cpu")
+    buf = RolloutBuffer(4, obs_dim=3, device=device)
+
+    for i in range(4):
+        buf.add(
+            obs=torch.randn(3),
+            action=torch.tensor(1),
+            reward=torch.tensor(1.0),
+            done=False,
+            logprob=torch.tensor(-0.5),
+            value=torch.tensor(0.2),
+        )
+
+    data = buf.get()
+    buf.check_finite()
+
+    assert data["obs"].shape == (4, 3)
+    assert data["actions"].shape == (4,)
+

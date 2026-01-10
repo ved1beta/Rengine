@@ -29,7 +29,7 @@ def train(rank=0, world_size=1):
         print(f"Using device: {device}")
 
     ROLLOUT_LEN = 2048
-    NUM_UPDATES = 100
+    NUM_UPDATES = 500
     LOG_INTERVAL = 10
 
     CHECKPIONT_INTERVAL = 50

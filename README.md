@@ -7,8 +7,8 @@ RLLM is a minimal, educational implementation of Proximal Policy Optimization (P
 ## Features
 
 - **PPO Training**: Full implementation of PPO with GAE (Generalized Advantage Estimation)
-- **Modular Architecture**: Clean separation of environments, models, rollout buffers, and losses
-- **Inference Pipeline**: Optimized inference with latency benchmarking
+- **Modular Architecture**: models, rollout buffers, and losses
+- **Inference Pipeline**: Optimized inference with benchmarking
 - **INT8 Quantization**: Dynamic quantization support for efficient deployment
 - **Checkpoint Management**: Save/resume training with full RNG state preservation
 
@@ -226,23 +226,6 @@ class MyEnv(BaseEnv):
 
 ## Configuration
 
-### Training Hyperparameters
-
-Located in [main.py](src/RLLM/main.py):
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `ROLLOUT_LEN` | 2048 | Steps per rollout |
-| `NUM_UPDATES` | 500 | Total training updates |
-| `LOG_INTERVAL` | 10 | Updates between logs |
-| `CHECKPOINT_INTERVAL` | 50 | Updates between checkpoints |
-| Learning Rate | 3e-4 | Adam optimizer LR |
-| GAE λ | 0.95 | GAE lambda parameter |
-| γ (gamma) | 0.99 | Discount factor |
-| Clip ε | 0.2 | PPO clipping parameter |
-| Value Coef | 0.5 | Value loss coefficient |
-| Entropy Coef | 0.01 | Entropy bonus coefficient |
-
 ### Model Architecture
 
 The `ActorCritic` model ([policy.py](src/RLLM/models/policy.py)):
@@ -273,13 +256,3 @@ See [requirements.txt](requirements.txt) for full dependencies.
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request

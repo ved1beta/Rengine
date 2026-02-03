@@ -1,258 +1,126 @@
-# RLLM
+# Rengine
 
-**Reinforcement Learning infrastructure with inference and quantization support.**
+A lightweight inference engine for reinforcement-learning rollouts, built to outperform general-purpose generation APIs in the regime that matters for RL: small batches, short-to-medium sequences, and strict per-token overhead.
 
-RLLM is a minimal, educational implementation of Proximal Policy Optimization (PPO) with a focus on clean code, inference optimization, and model quantization.
+## The Problem
+
+RL rollouts (PPO, DPO, RLHF) typically run at batch sizes 1-8 with tight throughput requirements. At this scale, frameworks like HuggingFace `model.generate()` spend more time in Python abstraction overhead — logits processors, dynamic cache management, attention mask construction — than in actual GPU compute. Rengine strips all of that out and provides a focused, inference-only decoding path.
+
+## Benchmark
+
+**Generation throughput (tok/s) — 35M param model, fp16, RTX 3050**
+
+| Batch | Prompt | Gen | Rengine | HF `generate()` | Speedup |
+|-------|--------|-----|---------|------------------|---------|
+| 1     | 32     | 64  | 491     | 332              | 1.48x   |
+| 4     | 32     | 64  | 461     | 318              | 1.45x   |
+| 8     | 32     | 64  | 463     | 316              | 1.47x   |
+| 1     | 128    | 128 | 501     | 340              | 1.47x   |
+| 8     | 128    | 128 | 461     | 317              | 1.45x   |
+
+Rengine holds a consistent ~1.45x advantage across batch sizes because decode steps remain Python-overhead bound at this model scale.
+
+**Memory tradeoff:**
+
+| Batch | Rengine | HF      |
+|-------|---------|---------|
+| 1     | 163 MB  | 155 MB  |
+| 8     | 245 MB  | 181 MB  |
+
+Rengine pre-allocates a static KV cache for the full sequence length. This trades higher memory for predictable latency — no dynamic allocation during decode.
+
+## Current Optimizations
+
+- Minimal Python logic per decode step (~15 lines in the hot loop)
+- Static KV cache — slice writes, no object churn or reallocation
+- No attention mask construction during single-token decode
+- No logits processor pipeline overhead
+- Direct `torch.argmax` / `torch.multinomial` — no abstraction layers
 
 ## Features
 
-- **PPO Training**: Full implementation of PPO with GAE (Generalized Advantage Estimation)
-- **Modular Architecture**: models, rollout buffers, and losses
-- **Inference Pipeline**: Optimized inference with benchmarking
-- **INT8 Quantization**: Dynamic quantization support for efficient deployment
-- **Checkpoint Management**: Save/resume training with full RNG state preservation
+- Decoder-only Transformer with RoPE and SwiGLU
+- Flash Attention via `F.scaled_dot_product_attention`
+- Static pre-allocated KV cache
+- Prefill + autoregressive decoding
+- Per-token log-probabilities (RL-ready)
+- Temperature, top-k, and nucleus (top-p) sampling
+- Weight tying (embedding / lm_head)
+- INT8 dynamic quantization
 
-## Installation
 
-### From Source
+## Usage
 
-```bash
-git clone https://github.com/ved1beta/RLLM.git
-cd RLLM
-pip install -e .
+```python
+from Rengine.inference import InferenceEngine, ModelConfig, Transformer
+
+config = ModelConfig(
+    vocab_size=32000,
+    num_layers=6,
+    num_heads=8,
+    hidden_dim=512,
+    intermediate_dim=1376,
+)
+
+model = Transformer(config).cuda().half()
+engine = InferenceEngine(model, device=torch.device("cuda"))
+
+tokens, logprobs = engine.generate(
+    prompt_tokens,       # [batch, prompt_len]
+    max_new_tokens=128,
+    temperature=0.0,     # greedy
+)
+# tokens:   [batch, num_generated]
+# logprobs: [batch, num_generated]  <-- feed directly into PPO loss
 ```
 
-### With Development Dependencies
+## When to Use Rengine
+
+**Good fit:** RLHF / PPO / DPO rollout collection, small-batch inference (1-8), fixed-length prompts, throughput-sensitive evaluation loops.
+
+**Not a good fit:** production serving with continuous batching, variable-length padded batches, beam search, multi-tenant inference.
+
+## Comparison
+
+| | Rengine | HF `generate()` |
+|---|---|---|
+| RL-focused (logprobs) | Yes | Partial |
+| Dynamic KV cache | No | Yes |
+| Flash Attention / SDPA | Yes | Yes |
+| RoPE | Yes | Yes |
+| Weight tying | Yes | Yes |
+| Continuous batching | No | Yes |
+| Attention mask (padding) | No | Yes |
+| Beam search | No | Yes |
+| Speculative decoding | No | Yes |
+
+
+## Requirements
+
+- Python >= 3.10
+- PyTorch >= 2.4
+- `transformers` (for benchmarking comparison)
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-### With Quantization Support
-
-```bash
-pip install -e ".[quantization]"
-```
-
-## Quick Start
-
-### Training
-
-Train a PPO agent on CartPole:
-
-```bash
-# Using the CLI entry point
-rllm-train
-
-# Or run directly
-python -m RLLM.main
-```
-
-Training will:
-- Run for 500 updates by default
-- Save checkpoints every 50 updates to `checkpoints/`
-- Log metrics every 10 updates
-
-### Inference
-
-Run inference with a trained checkpoint:
-
-```bash
-# Using the CLI entry point
-rllm-inference --checkpoint checkpoints/ckpt_000300.pt --episodes 10
-
-# Or run directly
-python -m RLLM.inference.run_inference --checkpoint checkpoints/ckpt_000300.pt
-```
-
-**Options:**
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--checkpoint` | `checkpoints/ckpt_000300.pt` | Path to checkpoint file |
-| `--episodes` | `10` | Number of evaluation episodes |
-| `--warmup` | `100` | Number of warmup inference steps |
-| `--seed` | `123` | Random seed for reproducibility |
-
-**Example Output:**
-```
-==================================================
-RLLM Inference Results
-==================================================
-Device:              cuda
-Checkpoint:          checkpoints/ckpt_000300.pt
-Episodes:            10
-==================================================
-Latency (avg):       0.125 ms
-Mean Reward:         487.50
-Mean Episode Length: 487.5
-==================================================
-```
-
-### Quantization
-
-Quantize a trained model to INT8 for efficient inference:
-
-```bash
-# Using the CLI entry point
-rllm-quantize --checkpoint checkpoints/ckpt_000300.pt --output artifacts/policy_int8.pt
-
-# Or run directly
-python -m RLLM.inference.quant --checkpoint checkpoints/ckpt_000300.pt
-```
-
-**Options:**
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--checkpoint` | `checkpoints/ckpt_000300.pt` | Path to trained checkpoint |
-| `--output` | `artifacts/policy_int8.pt` | Output path for quantized model |
-| `--obs-dim` | `4` | Observation dimension |
-| `--action-dim` | `2` | Action dimension |
-
-**Example Output:**
-```
-==================================================
-RLLM Policy Quantization
-==================================================
-Loading checkpoint: checkpoints/ckpt_000300.pt
-Original model size: 0.042 MB
-Quantizing with dtype: torch.qint8
-Quantized model size: 0.015 MB
-Compression ratio: 2.80x
-Saved to: artifacts/policy_int8.pt
-==================================================
-```
-
-## Project Structure
-
-```
-RLLM/
-├── src/RLLM/
-│   ├── __init__.py           # Package exports, version
-│   ├── main.py               # Training entry point
-│   ├── rollout.py            # Rollout buffer for PPO
-│   ├── losses.py             # PPO loss functions (policy, value, GAE)
-│   ├── chkpt.py              # Checkpoint save/load utilities
-│   ├── envs/
-│   │   ├── base.py           # Abstract environment interface
-│   │   └── cartpole.py       # CartPole environment wrapper
-│   ├── models/
-│   │   └── policy.py         # ActorCritic neural network
-│   └── inference/
-│       ├── __init__.py       # Inference module exports
-│       ├── load_model.py     # Model loading utilities
-│       ├── run_inference.py  # Inference benchmark script
-│       └── quant.py          # INT8 quantization utilities
-├── tests/
-│   └── test_env.py           # Unit tests
-├── checkpoints/              # Saved training checkpoints
-├── artifacts/                # Quantized models and exports
-├── requirements.txt          # Dependencies
-└── setup.py                  # Package configuration
-```
-
-## API Reference
-
-### Training
-
-```python
-from RLLM.main import train
-
-# Start training
-train(rank=0, world_size=1)
-```
-
-### Inference
-
-```python
-from RLLM.inference import load_policy, run_inference
-
-# Load a trained policy
-model = load_policy(
-    "checkpoints/ckpt_000300.pt",
-    obs_dim=4,
-    action_dim=2,
-    device="cuda",
-)
-
-# Run inference benchmark
-results = run_inference(
-    checkpoint_path="checkpoints/ckpt_000300.pt",
-    num_episodes=10,
-    warmup_steps=100,
-)
-# Returns: {"latency_ms": float, "mean_reward": float, "mean_length": float, ...}
-```
-
-### Quantization
-
-```python
-from RLLM.inference import quantize_policy, load_quantized_policy
-
-# Quantize a trained model
-results = quantize_policy(
-    checkpoint_path="checkpoints/ckpt_000300.pt",
-    output_path="artifacts/policy_int8.pt",
-)
-# Returns: {"original_size_mb": float, "quantized_size_mb": float, "compression_ratio": float}
-
-# Load quantized model for inference
-model = load_quantized_policy("artifacts/policy_int8.pt", obs_dim=4, action_dim=2)
-```
-
-### Custom Environments
-
-Extend `BaseEnv` to add new environments:
-
-```python
-from RLLM.envs.base import BaseEnv
-
-class MyEnv(BaseEnv):
-    def reset(self):
-        # Return initial observation as tensor
-        ...
-    
-    def step(self, action):
-        # Return (obs, reward, done, info)
-        ...
-    
-    @property
-    def obs_dim(self):
-        return 4
-    
-    @property
-    def action_dim(self):
-        return 2
-```
-
-## Configuration
-
-### Model Architecture
-
-The `ActorCritic` model ([policy.py](src/RLLM/models/policy.py)):
-
-```
-MLPEncoder: obs_dim → 64 → Tanh → 128 → Tanh
-PolicyHead: 128 → action_dim (logits)
-ValueHead:  128 → 1 (value)
-```
-
-## Testing
-
-Run the test suite:
+## Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-## Requirements
+## Roadmap
 
-- Python ≥ 3.10
-- PyTorch ≥ 2.4
-- Gymnasium
-- NumPy
+**Planned:** larger-model benchmarks (200M+), KV-cache memory optimization, reward-model inference path, PPO/TRL integration examples.
 
-See [requirements.txt](requirements.txt) for full dependencies.
+**Not planned:** distributed serving, beam search, speculative decoding.
+
+## Status
+
+Experimental, research-grade inference engine. APIs may change. Designed for learning, benchmarking, and RL experimentation.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT

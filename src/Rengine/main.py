@@ -2,11 +2,11 @@ import torch
 import time
 import numpy as np
 import random
-from RLLM.envs.cartpole import CartPoleEnv
-from RLLM.models.policy import ActorCritic
-from RLLM.rollout import RolloutBuffer
-from RLLM.losses import policy_loss, value_loss, total_loss, compute_gae
-from RLLM.chkpt import save_checkpoint , load_checkpoint
+from Rengine.envs.cartpole import CartPoleEnv
+from Rengine.models.policy import ActorCritic
+from Rengine.rollout import RolloutBuffer
+from Rengine.losses import policy_loss, value_loss, total_loss, compute_gae
+from Rengine.chkpt import save_checkpoint , load_checkpoint
 
 def train(rank=0, world_size=1):
     base_seed = 42

@@ -4,7 +4,7 @@ Core inference engine tests
 
 import torch
 import pytest
-from RLLM.inference.engine import (
+from Rengine.inference.engine import (
     ModelConfig,
     Transformer,
     InferenceEngine,

@@ -1,5 +1,5 @@
 import torch
-from RLLM.models.policy import ActorCritic
+from Rengine.models.policy import ActorCritic
 
 def load_policy(chkpt_path, obs_dim, action_dim, device):
     model = ActorCritic(obs_dim, action_dim).to(device)

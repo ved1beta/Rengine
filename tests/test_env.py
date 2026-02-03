@@ -2,11 +2,11 @@ import torch
 import tempfile
 from pathlib import Path
 
-from RLLM.envs.cartpole import CartPoleEnv
-from RLLM.models.policy import ActorCritic
-from RLLM.rollout import RolloutBuffer
-from RLLM.inference import load_policy, validate_numeric
-from RLLM.inference.quant import quantize_policy, load_quantized_policy
+from Rengine.envs.cartpole import CartPoleEnv
+from Rengine.models.policy import ActorCritic
+from Rengine.rollout import RolloutBuffer
+from Rengine.inference import load_policy, validate_numeric
+from Rengine.inference.quant import quantize_policy, load_quantized_policy
 
 
 def test_cartpole_env():

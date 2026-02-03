@@ -3,32 +3,42 @@
 
 A lightweight minimal inference engine specifically for generating tokens during RL training (RLHF / PPO / DPO), !!
 
-## The Problem
 
-RL rollouts (PPO, DPO, RLHF) typically run at batch sizes 1-8 with tight throughput requirements. At this scale, frameworks like HuggingFace `model.generate()` spend more time in Python abstraction overhead — logits processors, dynamic cache management, attention mask construction — than in actual GPU compute. Rengine strips all of that out and provides a focused, inference-only decoding path.
 
 ## Benchmark
 
-**Generation throughput (tok/s) — 35M param model, fp16, RTX 3050**
+**Generation throughput (tok/s) — 500M param model, fp16, NVIDIA RTX (5.67GB)**
 
 | Batch | Prompt | Gen | Rengine | HF `generate()` | Speedup |
-|-------|--------|-----|---------|------------------|---------|
-| 1     | 32     | 64  | 491     | 332              | 1.48x   |
-| 4     | 32     | 64  | 461     | 318              | 1.45x   |
-| 8     | 32     | 64  | 463     | 316              | 1.47x   |
-| 1     | 128    | 128 | 501     | 340              | 1.47x   |
-| 8     | 128    | 128 | 461     | 317              | 1.45x   |
+|-------|--------|-----|---------|-----------------|---------|
+| 1     | 32     | 64  | 180.9   | 138.3           | **1.31x** |
+| 4     | 32     | 64  | 178.2   | 139.6           | **1.28x** |
+| 8     | 32     | 64  | 177.9   | 139.1           | **1.28x** |
+| 1     | 32     | 128 | 174.7   | 133.9           | **1.31x** |
+| 4     | 32     | 128 | 187.5   | 140.8           | **1.33x** |
+| 8     | 32     | 128 | 175.0   | 135.9           | **1.29x** |
+| 1     | 128    | 64  | 187.3   | 142.3           | **1.32x** |
+| 4     | 128    | 64  | 174.0   | 137.5           | **1.27x** |
+| 8     | 128    | 64  | 147.1   | 117.1           | **1.26x** |
+| 1     | 128    | 128 | 186.1   | 139.0           | **1.34x** |
+| 4     | 128    | 128 | 173.8   | 133.7           | **1.30x** |
+| 8     | 128    | 128 | 154.4   | 116.5           | **1.33x** |
 
-Rengine holds a consistent ~1.45x advantage across batch sizes because decode steps remain Python-overhead bound at this model scale.
+
+**Model specs:**
+- Architecture: LLaMA-style decoder-only
+- Parameters: ~238M (16 layers, 16 heads, 1024 hidden)
+- Vocabulary: 32,000
+- Dtype: FP16
 
 **Memory tradeoff:**
 
-| Batch | Rengine | HF      |
-|-------|---------|---------|
-| 1     | 163 MB  | 155 MB  |
-| 8     | 245 MB  | 181 MB  |
+| Configuration | Rengine | HF      | Difference |
+|---------------|---------|---------|------------|
+| batch=1, prompt=32, gen=64  | 1019 MB | 1017 MB | +2 MB  |
+| batch=8, prompt=128, gen=128 | 1214 MB | 1150 MB | +64 MB |
 
-Rengine pre-allocates a static KV cache for the full sequence length. This trades higher memory for predictable latency — no dynamic allocation during decode.
+Rengine pre-allocates a static KV cache for the full sequence length. Memory usage is comparable to HF's dynamic cache approach.
 
 ## Current Optimizations
 
@@ -37,11 +47,13 @@ Rengine pre-allocates a static KV cache for the full sequence length. This trade
 - No attention mask construction during single-token decode
 - No logits processor pipeline overhead
 - Direct `torch.argmax` / `torch.multinomial` — no abstraction layers
+- Flash Attention via PyTorch's SDPA
 
 ## Features
 
 - Decoder-only Transformer with RoPE and SwiGLU
 - Flash Attention via `F.scaled_dot_product_attention`
+- **Custom CUDA kernels for sampling** (greedy, temperature-scaled)
 - Static pre-allocated KV cache
 - Prefill + autoregressive decoding
 - Per-token log-probabilities (RL-ready)

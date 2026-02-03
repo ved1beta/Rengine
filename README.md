@@ -1,7 +1,7 @@
 ![alt text](image.png)
 # Rengine
 
-A lightweight inference engine for reinforcement-learning rollouts, built to outperform general-purpose generation APIs in the regime that matters for RL: small batches, short-to-medium sequences, and strict per-token overhead.
+A lightweight minimal inference engine specifically for generating tokens during RL training (RLHF / PPO / DPO), !!
 
 ## The Problem
 

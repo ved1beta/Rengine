@@ -1,3 +1,4 @@
+![alt text](image.png)
 # Rengine
 
 A lightweight inference engine for reinforcement-learning rollouts, built to outperform general-purpose generation APIs in the regime that matters for RL: small batches, short-to-medium sequences, and strict per-token overhead.
@@ -73,13 +74,6 @@ tokens, logprobs = engine.generate(
 # tokens:   [batch, num_generated]
 # logprobs: [batch, num_generated]  <-- feed directly into PPO loss
 ```
-
-## When to Use Rengine
-
-**Good fit:** RLHF / PPO / DPO rollout collection, small-batch inference (1-8), fixed-length prompts, throughput-sensitive evaluation loops.
-
-**Not a good fit:** production serving with continuous batching, variable-length padded batches, beam search, multi-tenant inference.
-
 ## Comparison
 
 | | Rengine | HF `generate()` |

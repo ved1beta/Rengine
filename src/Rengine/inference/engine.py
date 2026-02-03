@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
 from typing import Optional, Tuple, List
+from ..kernals.cuda_sampler import sample_with_cuda_fallback
 
 
 @dataclass
@@ -282,6 +283,7 @@ def sample(
     temperature: float = 1.0,
     top_k: int = 0,
     top_p: float = 1.0,
+    use_cuda_kernel: bool = True,
 ) -> torch.Tensor:
     """Sample next token from logits with temperature, top-k, and top-p.
 
@@ -290,10 +292,18 @@ def sample(
         temperature: 0 = greedy
         top_k: 0 = disabled
         top_p: 1.0 = disabled
+        use_cuda_kernel:True
 
     Returns:
         token_ids: [batch]
     """
+    if (use_cuda_kernel and 
+        top_k == 0 and 
+        top_p >= 1.0 and
+        logits.is_cuda):
+        return sample_with_cuda_fallback(logits, temperature, use_cuda_kernel=True)
+    
+
     if temperature == 0:
         return torch.argmax(logits, dim=-1)
 
